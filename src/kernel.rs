@@ -59,7 +59,9 @@ pub fn fast_batched_dot_product_avx512<const K: usize, T: Copy>(
 
                         let a_idx = k;
                         let b_idx = j * b_rows + k;
-                        let b_val_simd = b_ptr.add(b_idx).to_m512();
+
+                        let b_val = b_ptr.add(b_idx).to_m512();
+                        let b_val_simd = _mm512_set1_epi64(b_val as i64);
 
                         for batch in 0..K {
                             tmp[batch] =

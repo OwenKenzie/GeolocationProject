@@ -678,6 +678,19 @@ pub fn fast_add_into(res: &mut PolyMatrixNTT, a: &PolyMatrixNTT) {
     }
 }
 
+
+pub fn multiply_no_reduce(
+    res: &mut PolyMatrixNTT,
+    a: &PolyMatrixNTT,
+    b: &PolyMatrixNTT,
+    start_inner_dim: usize,
+) {
+    // Compatibility wrapper: older call sites use `multiply_no_reduce`,
+    // but the optimized implementation in this file is `fast_multiply_no_reduce`.
+    fast_multiply_no_reduce(res.params, res, a, b, start_inner_dim)
+}
+
+
 pub fn fast_multiply_no_reduce(
     params: &Params,
     res: &mut PolyMatrixNTT,
