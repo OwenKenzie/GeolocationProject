@@ -1,7 +1,7 @@
 from __future__ import annotations
-import os, time
+import os, time, json
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 from tile_db import GeoGrid, write_tile_db_bin, read_tile_db_bin_header, direct_fetch
 from ypir_adapter import ypir_setup, ypir_make_query, ypir_answer, ypir_extract
@@ -31,7 +31,31 @@ def ensure_db(path: str, record_size: int, grid: GeoGrid) -> None:
     write_tile_db_bin(path, grid, record_size, seed=42)
 
 
-def run_baseline(db_path: str, idx: int) -> Result:
+def parse_tile_record(rec: bytes) -> dict:
+    """
+    Records are JSON padded with NUL bytes to fixed record_size.
+    """
+    txt = rec.rstrip(b"\x00").decode("utf-8", errors="replace")
+    try:
+        return json.loads(txt)
+    except json.JSONDecodeError:
+        return {"_raw": txt}
+
+
+def pretty_print_tile(d: dict) -> None:
+    if "_raw" in d:
+        print(d["_raw"])
+        return
+
+    print(f"tile: {d.get('tile')}")
+    print(f"temperature: {d.get('temperature_c')} °C")
+    print(f"AQI: {d.get('air_quality_index')}")
+    print(f"precipitation: {d.get('precipitation_mm')} mm")
+    lvl = d.get("proximity_alert_level")
+    print(f"proximity alert: level {lvl} (4 = highest)")
+
+
+def run_baseline(db_path: str, idx: int) -> Tuple[Result, bytes]:
     record_size, n_tiles, _ = read_tile_db_bin_header(db_path)
 
     # Client sends idx (pretend 4 bytes)
@@ -41,7 +65,8 @@ def run_baseline(db_path: str, idx: int) -> Result:
     s0 = time.perf_counter()
     rec = direct_fetch(db_path, idx)
     s1 = time.perf_counter()
-    c1 = time.perf_counter()
+
+    # client decode (strip padding)
     _ = rec.rstrip(b"\x00")
     t1 = time.perf_counter()
 
@@ -56,10 +81,10 @@ def run_baseline(db_path: str, idx: int) -> Result:
         t_client_ms=_ms((t1 - t0) - (s1 - s0)),
         t_server_ms=_ms(s1 - s0),
         t_total_ms=_ms(t1 - t0),
-    )
+    ), rec
 
 
-def run_ypir(db_path: str, idx: int) -> Result:
+def run_ypir(db_path: str, idx: int) -> Tuple[Result, bytes]:
     record_size, n_tiles, _ = read_tile_db_bin_header(db_path)
 
     # IMPORTANT: n_items & item_size_bytes define the logical DB for params_for(...)
@@ -81,7 +106,6 @@ def run_ypir(db_path: str, idx: int) -> Result:
     # Client extract
     c2 = time.perf_counter()
     raw = ypir_extract(ctx, resp_bytes)
-    # Demo-friendly: interpret extracted bytes as “record”, truncate to record_size
     rec = bytes(raw[:record_size])
     c3 = time.perf_counter()
 
@@ -98,7 +122,7 @@ def run_ypir(db_path: str, idx: int) -> Result:
         t_client_ms=_ms((c1 - c0) + (c3 - c2)),
         t_server_ms=_ms(s1 - s0),
         t_total_ms=_ms(t1 - t0),
-    )
+    ), rec
 
 
 def print_results(results: List[Result]) -> None:
@@ -123,16 +147,24 @@ def main() -> None:
 
     os.makedirs("data", exist_ok=True)
     db_path = os.path.join("data", "tiles.bin")
+
     ensure_db(db_path, record_size, grid)
 
     # Example “user location”
     lat, lon = 48.137, 11.575
     idx = grid.tile_index(lat, lon)
 
-    results: List[Result] = []
-    results.append(run_baseline(db_path, idx))
-    results.append(run_ypir(db_path, idx))
+    baseline_res, baseline_rec = run_baseline(db_path, idx)
+    ypir_res, ypir_rec = run_ypir(db_path, idx)
 
+    print("\n=== TILE DATA (decoded from returned record) ===")
+    print("Baseline direct fetch:")
+    pretty_print_tile(parse_tile_record(baseline_rec))
+
+    print("\nYPIR fetch:")
+    pretty_print_tile(parse_tile_record(ypir_rec))
+
+    results: List[Result] = [baseline_res, ypir_res]
     print_results(results)
 
 

@@ -343,12 +343,37 @@ impl<'a> YClient<'a> {
     }
 
     pub fn decode_response(&self, response: &[u64]) -> Vec<u64> {
-        debug!("Decoding response: {:?}", &response[..16]);
+        debug!("Decoding response: {:?}", &response[..response.len().min(16)]);
         let db_cols = 1 << (self.params.db_dim_2 + self.params.poly_len_log2);
+
+        // ------------------------------------------------------------
+        // NEW: Handle "short" response format produced by current server:
+        // server.answer_query() returns exactly db_cols u64 words.
+        // ------------------------------------------------------------
+        if response.len() == db_cols {
+            let mut out = Vec::with_capacity(db_cols);
+            for col in 0..db_cols {
+                let result = (response[col] % self.params.modulus) as u64;
+                let result_rescaled = rescale(result, self.params.modulus, self.params.pt_modulus);
+                out.push(result_rescaled);
+            }
+            return out;
+        }
+
+        // ------------------------------------------------------------
+        // Old path: full LWE matrix format (poly_len + 1) x db_cols
+        // ------------------------------------------------------------
+        let expected = (self.params.poly_len + 1) * db_cols;
+        assert!(
+            response.len() >= expected,
+            "decode_response: expected at least {} words, got {}",
+            expected,
+            response.len()
+        );
 
         let sk = self.inner.get_sk_reg().as_slice().to_vec();
 
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(db_cols);
         for col in 0..db_cols {
             let mut sum = 0u128;
             for i in 0..self.params.poly_len {
@@ -366,6 +391,7 @@ impl<'a> YClient<'a> {
 
         out
     }
+
 
     pub fn client(&self) -> &Client<'a> {
         self.inner

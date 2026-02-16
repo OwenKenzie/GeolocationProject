@@ -39,28 +39,24 @@ def write_tile_db_bin(
 ) -> None:
     """
     Writes a binary file of N fixed-size records.
-    Record i contains JSON-like metadata + padding.
+    Record i contains JSON metadata + padding to `record_size`.
     """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     rng = random.Random(seed)
 
     with open(path, "wb") as f:
-        # Simple header (optional): magic + record_size + n_tiles
+        # header: magic + record_size + n_tiles
         f.write(b"TILEDB1")
         f.write(struct.pack("<II", record_size, grid.n_tiles))
 
         for idx in range(grid.n_tiles):
-            # Fake "geodata" you can show in slides
-            # (weather, POIs, risk score) like in your proposal :contentReference[oaicite:4]{index=4}
+            # The fields you want to display in the demo:
             payload = {
                 "tile": idx,
-                "weather_c": round(rng.uniform(-5, 35), 1),
-                "aqi": int(rng.uniform(0, 250)),
-                "risk": round(rng.random(), 3),
-                "pois": [
-                    {"name": f"poi_{idx}_{k}", "type": rng.choice(["cafe", "bus", "hospital", "school"])}
-                    for k in range(rng.randint(1, 5))
-                ],
+                "temperature_c": round(rng.uniform(-10.0, 40.0), 1),
+                "air_quality_index": int(rng.uniform(0, 301)),      # 0..300
+                "precipitation_mm": round(rng.uniform(0.0, 25.0), 1),
+                "proximity_alert_level": int(rng.uniform(1, 5)),    # 1..4
             }
             raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
             f.write(_pad_record(raw, record_size))
