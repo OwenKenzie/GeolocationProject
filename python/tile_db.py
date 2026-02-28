@@ -50,7 +50,7 @@ def write_tile_db_bin(
         f.write(struct.pack("<II", record_size, grid.n_tiles))
 
         for idx in range(grid.n_tiles):
-            # The fields you want to display in the demo:
+            #Fields to show in dmeo
             payload = {
                 "tile": idx,
                 "temperature_c": round(rng.uniform(-10.0, 40.0), 1),

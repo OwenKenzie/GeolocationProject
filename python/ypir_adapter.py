@@ -54,12 +54,12 @@ def ypir_setup(db_path: str, n_items: int, item_size_bytes: int, *, is_simplepir
     dim_log2 = int(ypir_rs.params_db_dim_1(params))
     required = int(ypir_rs.required_db_bytes(params))
 
-    # Build DB bytes in the format/size the Rust server expects
+    # Build DB bytes in the format the  server expects
     db_bytes = _build_ypir_db_bytes(db_path, required)
 
     client = ypir_rs.client_new(params)
 
-    # inp_transposed=False, pad_rows=True are safe defaults for demos
+    #defaults
     server = ypir_rs.server_new(params, db_bytes, False, True)
 
     return YpirContext(
@@ -77,13 +77,13 @@ def ypir_make_query(ctx: YpirContext, idx: int) -> bytes:
     """
     Generates a packed query bytes blob (ready for ypir_rs.answer).
     """
-    # Query index must be within [0, 2^dim_log2). We map tile idx into that range.
+    # Mod 2^dim_log2
     row = idx % (1 << ctx.dim_log2)
 
-    # These defaults work with the packing step we added in Rust:
+    # defaults for packing step
     public_seed_idx = 0
     packing = True
-    pack = True  # IMPORTANT: server expects packed query words
+    pack = True 
 
     return ypir_rs.query(ctx.client, public_seed_idx, ctx.dim_log2, packing, row, pack)
 

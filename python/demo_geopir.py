@@ -35,6 +35,7 @@ def parse_tile_record(rec: bytes) -> dict:
     """
     Records are JSON padded with NUL bytes to fixed record_size.
     """
+    
     txt = rec.rstrip(b"\x00").decode("utf-8", errors="replace")
     try:
         return json.loads(txt)
@@ -58,7 +59,7 @@ def pretty_print_tile(d: dict) -> None:
 def run_baseline(db_path: str, idx: int) -> Tuple[Result, bytes]:
     record_size, n_tiles, _ = read_tile_db_bin_header(db_path)
 
-    # Client sends idx (pretend 4 bytes)
+    #4 bytes
     upload = 4
 
     t0 = time.perf_counter()
@@ -66,7 +67,7 @@ def run_baseline(db_path: str, idx: int) -> Tuple[Result, bytes]:
     rec = direct_fetch(db_path, idx)
     s1 = time.perf_counter()
 
-    # client decode (strip padding)
+    # client decode by removing padding
     _ = rec.rstrip(b"\x00")
     t1 = time.perf_counter()
 
@@ -87,8 +88,7 @@ def run_baseline(db_path: str, idx: int) -> Tuple[Result, bytes]:
 def run_ypir(db_path: str, idx: int) -> Tuple[Result, bytes]:
     record_size, n_tiles, _ = read_tile_db_bin_header(db_path)
 
-    # IMPORTANT: n_items & item_size_bytes define the logical DB for params_for(...)
-    # Here we align them with your tile DB.
+    # align them with tile DB
     ctx = ypir_setup(db_path, n_tiles, record_size, is_simplepir=False)
 
     t0 = time.perf_counter()
@@ -161,8 +161,6 @@ def main() -> None:
     print("Baseline direct fetch:")
     pretty_print_tile(parse_tile_record(baseline_rec))
 
-    print("\nYPIR fetch:")
-    pretty_print_tile(parse_tile_record(ypir_rec))
 
     results: List[Result] = [baseline_res, ypir_res]
     print_results(results)
